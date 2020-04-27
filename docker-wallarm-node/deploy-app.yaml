@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      # Wallarm element: definition of Wallarm sidecar container
+      - name: wallarm-nginx
+        image: i2213010/sidecar
+        command: ["/usr/local/bin/nginx.sh"]
+        imagePullPolicy: Always
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 56245
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 56245
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        env:
+        - name: WALLARM_API_HOST
+          value: "api.wallarm.com"
+        - name: WALLARM_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: token
+              key: wallarm_token
+        # - name: WALLARM_ACL_ENABLE
+        #   value: "true"
+        # - name: TARANTOOL_HOST
+        #   value: 127.0.0.1
+        ports:
+          - name: http
+            containerPort: 56245
+        volumeMounts:
+        - mountPath: /etc/nginx/sites-enabled
+          readOnly: true
+          name: wallarm-nginx-conf
+      # Wallarm element: definition of a tarantool sidecar container
+      - name: wallarm-tarantool
+        image: i2213010/sidecar
+        command: ["/usr/local/bin/tarantool.sh"]
+        readinessProbe:
+          tcpSocket:
+            port: 3313
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 3313
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        env:
+        - name: WALLARM_API_HOST
+          value: "api.wallarm.com"
+        - name: WALLARM_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: token
+              key: wallarm_token
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        ports:
+          - name: tcp
+            containerPort: 3313
+      # Definition of your main app container
+      - name: dvwa
+        image: "vulnerables/web-dvwa:latest"
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+          - name: http
+            containerPort: 80
+      volumes:
+      # Wallarm element: definition of the wallarm-nginx-conf volume
+      - name: wallarm-nginx-conf
+        configMap:
+          name: wallarm-sidecar-nginx-conf
+          items:
+            - key: default
+              path: default

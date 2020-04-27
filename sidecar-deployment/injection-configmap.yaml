@@ -1,0 +1,72 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sidecar-injector-webhook-configmap
+  namespace: sidecar-injector
+data:
+  sidecarconfig.yaml: |
+    volumes:
+    - name: wallarm-nginx-conf
+      configMap:
+        name: wallarm-sidecar-nginx-conf
+        items:
+          - key: default
+            path: default
+    containers:
+    - name: wallarm-nginx
+      image: awallarm/wallarm-node-sidecar:slim
+      imagePullPolicy: Always
+      command: ["/usr/local/bin/nginx.sh"]
+      readinessProbe:
+        httpGet:
+          path: /healthz
+          port: 56245
+        initialDelaySeconds: 3
+        periodSeconds: 3
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 56245
+        initialDelaySeconds: 3
+        periodSeconds: 3
+      env:
+      - name: WALLARM_API_HOST
+        value: "api.wallarm.com"
+      - name: WALLARM_API_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: token
+            key: wallarm_token
+      ports:
+        - name: http
+          containerPort: 56245
+      volumeMounts:
+        - mountPath: /etc/nginx/sites-enabled
+          readOnly: true
+          name: wallarm-nginx-conf
+    - name: wallarm-tarantool
+      image: awallarm/wallarm-node-sidecar:slim
+      imagePullPolicy: Always
+      command: ["/usr/local/bin/tarantool.sh"]
+      readinessProbe:
+        tcpSocket:
+          port: 3313
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      livenessProbe:
+        tcpSocket:
+          port: 3313
+        initialDelaySeconds: 10
+        periodSeconds: 20
+      env:
+      - name: WALLARM_API_HOST
+        value: "api.wallarm.com"
+      - name: WALLARM_API_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: token
+            key: wallarm_token
+      ports:
+        - name: tcp
+          containerPort: 3313
