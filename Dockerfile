@@ -12,7 +12,7 @@ COPY cmd .
 RUN GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o ${IMAGE_NAME} .
 
-FROM alpine:3.11.5
+FROM alpine:3.18.6
 
 LABEL sidecar="wallarm"
 
